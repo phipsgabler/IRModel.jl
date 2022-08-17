@@ -1,0 +1,9 @@
+name = "IRModel"
+uuid = "891dd0eb-f4c9-4e93-8f5f-4256652a1bbd"
+authors = ["Philipp Gabler <phipsgabler@users.noreply.github.com>"]
+version = "0.1.0"
+
+[deps]
+AbstractPPL = "7a57a42e-76ec-4ea3-a279-07e840d6d9cf"
+MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+Setfield = "efcf1570-3423-57d1-acb7-fd33fddbac46"

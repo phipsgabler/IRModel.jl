@@ -33,21 +33,11 @@ function transformed_ir(mod, body)
     return ir
 end
 
-
-function irmodel(mod, expr)
-    fundef = MT.splitdef(expr)
-    name = fundef[:name]
-    args = map(MT.splitarg, fundef[:args])
-    kwargs = map(MT.splitarg, fundef[:kwargs])
-    rtype = get(fundef, :rtype, :Any)
-    whereparams = fundef[:whereparams]
-    body = fundef[:body]
-
-    ir = transformed_ir(mod, body)
-
+function ast_from_ir(ir)
     resolve(expr::Expr) = Expr(expr.head, resolve.(expr.args)...)
     resolve(s::Core.SlotNumber) = ir.slotnames[s.id]
-    resolve(v::Core.SSAValue) = v #Symbol("%", v.id)
+    # resolve(v::Core.SSAValue) = v
+    resolve(v::Core.SSAValue) = Symbol("%", v.id)
     resolve(x) = x
     jumplabel(i) = Symbol("#", i)
 
@@ -70,8 +60,8 @@ function irmodel(mod, expr)
         elseif Meta.isexpr(line, :(=))
             push_line!(current_block, Expr(:(=), resolve(line.args[1]), resolve.(line.args[2:end])...))
         else
-            # push_line!(current_block, :($(Symbol("%", i)) = $(resolve(line))))
-            push_line!(current_block, :($(Core.SSAValue(i)) = $(resolve(line))))
+            push_line!(current_block, :($(Symbol("%", i)) = $(resolve(line))))
+            # push_line!(current_block, :($(Core.SSAValue(i)) = $(resolve(line))))
         end
     end
 
@@ -103,12 +93,42 @@ function irmodel(mod, expr)
     code = MT.striplines(Expr(:block, blocks...))
     # TODO: linetable, codelocs
 
-    return (;ir, code, args)
+    return code
+end
+
+
+function irmodel(mod, expr)
+    fundef = MT.splitdef(expr)
+    name = fundef[:name]
+    args = map(MT.splitarg, fundef[:args])
+    kwargs = map(MT.splitarg, fundef[:kwargs])
+    rtype = get(fundef, :rtype, :Any)
+    whereparams = fundef[:whereparams]
+    body = fundef[:body]
+
+    ir = transformed_ir(mod, body)
+    code = ast_from_ir(ir)
+
+    return QuoteNode((;ir, code, args))
     # return QuoteNode(MT.identity(code))
 end
 
 macro irmodel(expr)
     return irmodel(__module__, expr)
+end
+
+function partial_evaluate(ir, env)
+    resolve(env, expr::Expr) = Expr(expr.head, resolve.((env,), expr.args)...)
+    resolve(env, s::Core.SlotNumber) = get(env, ir.slotnames[s.id], s)
+    resolve(env, v::Core.SSAValue) = get(env, Symbol("%", v.id), v)
+    resolve(env, x) = x
+
+    isknown(x::Union{Symbol, Core.SlotNumber, Core.SSAValue}) = false
+    isknown(x) = true
+
+    map(ir.code) do line
+        resolve(env, line)
+    end
 end
 
 
